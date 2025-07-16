@@ -53,8 +53,8 @@ const handleSubmit = async () => {
   try {
     const presignedURL = await getPresignedURL({
       bucketName: 'firmware',
-      fileName: `${version.value}/${file.value.name}`,
-      tokenDurationSeconds: 3600
+      objectKey: `${version.value}/${file.value.name}`,
+      expireSeconds: 3600
     });
     
     console.log(`预签名URL获取成功:\n${presignedURL}`);
@@ -72,7 +72,7 @@ const handleSubmit = async () => {
 
 const getPresignedURL = async (params) => {
   const response = await axios.post(
-    '/api/fileUpload/uploadUrl',
+    '/api/upload/uploadUrl',
     params,
     {
       headers: {
@@ -80,7 +80,7 @@ const getPresignedURL = async (params) => {
       }
     }
   );
-  return response.data.presignedUrl;
+  return response.data.url;
 };
 
 const uploadFileToMinIO = async (url, file) => {

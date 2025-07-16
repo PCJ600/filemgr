@@ -3,7 +3,8 @@
 ```
 go mod init XXX
 go mod tidy
-go run main.go
+go build -o filemgr_backend cmd/main.go
+./filemgr_backend
 ```
 
 # How to test
