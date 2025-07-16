@@ -24,7 +24,7 @@ func GenerateUploadUrl(c *gin.Context) {
 	endpoint := "minio:9000"
 	// accessKey := os.Getenv("MINIO_ACCESS_KEY")
 	// secretKey := os.Getenv("MINIO_SECRET_KEY")
-	accessKey := "myminioadmin"
+	accessKey := "filemgr"
 	secretKey := "password@123456"
 
 	var reqData presignedUrlRequest
