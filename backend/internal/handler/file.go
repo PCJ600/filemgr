@@ -27,13 +27,13 @@ func (h *FileHandler) GenerateUploadURL(c *gin.Context) {
 		ExpireSeconds int64 `json:"expireSeconds" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("req data: %+v", req)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": 4000001,
 			"message": "req body invalid: " + err.Error(),
 		})
 		return
 	}
-	log.Printf("req data: %+v", req)
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10 * time.Second)
     defer cancel()
@@ -46,7 +46,7 @@ func (h *FileHandler) GenerateUploadURL(c *gin.Context) {
 		return
 	}
 
-	c.PureJSON(http.StatusOK, gin.H {"url": url})
+	c.PureJSON(http.StatusOK, gin.H {"code": 0, "url": url})
 }
 
 func (h *FileHandler) GenerateDownloadURL(c *gin.Context) {
@@ -57,13 +57,13 @@ func (h *FileHandler) GenerateDownloadURL(c *gin.Context) {
 	}
 
     if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("req data: %+v", req)
         c.JSON(http.StatusBadRequest, gin.H{
             "code": 4000001,
             "msg":  "req body invalid: " + err.Error(),
         })
         return
     }
-	log.Printf("req data: %+v", req)
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 10 * time.Second)
     defer cancel()
@@ -83,5 +83,34 @@ func (h *FileHandler) GenerateDownloadURL(c *gin.Context) {
         return
     }
 
-	c.PureJSON(http.StatusOK, gin.H {"url": url})
+	c.PureJSON(http.StatusOK, gin.H {"code": 0, "url": url})
+}
+
+func (h *FileHandler) DeleteObject(c *gin.Context) {
+	var req struct {
+		BucketName string `json:"bucketName" binding:"required,min=3,max=63"`
+		ObjectKey string `json:"objectKey" binding:"required,min=1,max=1024"`
+	}
+
+    if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("req data: %+v", req)
+        c.JSON(http.StatusBadRequest, gin.H{
+            "code": 4000001,
+            "msg":  "req body invalid: " + err.Error(),
+        })
+        return
+    }
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10 * time.Second)
+    defer cancel()
+
+	if err := h.fileService.DeleteObject(ctx, req.BucketName, req.ObjectKey); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"code": 5000001,
+			"msg":  "delete object failed: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"code": 0})
 }

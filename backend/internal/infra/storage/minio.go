@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"time"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -43,3 +44,27 @@ func (c *Client) PresignedGetObject(ctx context.Context, bucketName string, obje
 	}
 	return url.String(), nil
 }
+
+func (c *Client) DeleteObject(ctx context.Context, bucketName string, objectKey string) error {
+	return c.cli.RemoveObject(ctx, bucketName, objectKey, minio.RemoveObjectOptions{})
+}
+
+func (c *Client) DeleteObjectsWithPrefix(ctx context.Context, bucketName string, prefix string) error {
+	objectsCh := make(chan minio.ObjectInfo)
+
+	go func() {
+		defer close(objectsCh)
+		for obj := range c.cli.ListObjects(ctx, bucketName, minio.ListObjectsOptions{
+			Prefix:    prefix,
+			Recursive: true,
+		}) {
+			objectsCh <- obj
+		}
+	}()
+
+	for err := range c.cli.RemoveObjects(ctx, bucketName, objectsCh, minio.RemoveObjectsOptions{}) {
+		return fmt.Errorf("delete failed: %v", err)
+	}
+	return nil
+}
+
