@@ -11,7 +11,7 @@ type Client struct {
 	cli *minio.Client
 }
 
-func NewMinioClient(endpoint string , accessKey string, secretKey string) (*Client, error) {
+func NewStorageClient(endpoint string , accessKey string, secretKey string) (*Client, error) {
 	cli, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: false,
@@ -22,8 +22,22 @@ func NewMinioClient(endpoint string , accessKey string, secretKey string) (*Clie
 	return &Client{cli: cli}, nil
 }
 
-func (c *Client) PresignedPutObject(ctx context.Context, bucketName string, objectKey string, expiry time.Duration) (string, error) {
+func (c *Client) StatObject(ctx context.Context, bucketName string, objectKey string) (minio.ObjectInfo, error) {
+	return c.cli.StatObject(ctx, bucketName, objectKey, minio.StatObjectOptions{})
+}
+
+func (c *Client) PresignedPutObject(ctx context.Context, bucketName string, objectKey string,
+									expiry time.Duration) (string, error) {
 	url, err := c.cli.PresignedPutObject(ctx, bucketName, objectKey, expiry)
+	if err != nil {
+		return "", err
+	}
+	return url.String(), nil
+}
+
+func (c *Client) PresignedGetObject(ctx context.Context, bucketName string, objectKey string,
+									expiry time.Duration) (string, error) {
+	url, err := c.cli.PresignedGetObject(ctx, bucketName, objectKey, expiry, nil)
 	if err != nil {
 		return "", err
 	}

@@ -1,6 +1,6 @@
 <template>
   <div class="upload-container">
-    <h1>固件升级包上传</h1>
+    <h1>升级包上传</h1>
     <form @submit.prevent="handleSubmit">
       <!-- 版本号输入 -->
       <div class="input-group">
@@ -9,7 +9,7 @@
           type="text"
           id="version"
           v-model="version"
-          placeholder="例如：v1.0.0"
+          placeholder="例如：1.0.0"
           required
         />
       </div>
@@ -26,7 +26,17 @@
         />
       </div>
 
-      <button type="submit">提交</button>
+     <!-- 上传进度和状态 -->
+      <div v-if="progress > 0" class="progress-bar">
+        <div class="progress" :style="{ width: progress + '%' }"></div>
+        <span>{{ progress }}%</span>
+      </div>
+      <div v-if="status" class="status">{{ status }}</div>
+
+      <button type="submit" :disabled="isLoading">
+        {{ isLoading ? '处理中...' : '提交' }}
+      </button>
+
     </form>
   </div>
 </template>
@@ -38,6 +48,8 @@ import axios from 'axios';
 const version = ref('');
 const file = ref(null);
 const isLoading = ref(false);
+const progress = ref(0);
+const status = ref('');
 
 const handleFileChange = (e) => {
   file.value = e.target.files[0];
@@ -49,30 +61,66 @@ const handleSubmit = async () => {
     return;
   }
   isLoading.value = true;
+  status.value = '开始处理文件...';
+  progress.value = 0;
 
   try {
-    const presignedURL = await getPresignedURL({
+    status.value = '计算文件校验和...';
+    const sha256 = await calculateSHA256(file.value);
+    progress.value = 25;
+
+
+    status.value = '获取升级包上传链接...';
+    const firmwareUrl = await getPresignedURL({
       bucketName: 'firmware',
       objectKey: `${version.value}/${file.value.name}`,
       expireSeconds: 3600
     });
-    
-    console.log(`预签名URL获取成功:\n${presignedURL}`);
+    const checksumUrl = await getPresignedURL({
+      bucketName: 'firmware',
+      objectKey: `${version.value}/${file.value.name}.sha256`,
+      expireSeconds: 3600
+    });
+    progress.value = 50;
 
-    await uploadFileToMinIO(presignedURL, file.value);
+    status.value = '上传文件中...';
+    await Promise.all([
+      uploadFileToMinIO(firmwareUrl, file.value),
+      uploadFileToMinIO(checksumUrl, new Blob([sha256], { type: 'text/plain' }))
+    ]);
+    progress.value = 100;
 
+    status.value = '上传成功';
   } catch (err) {
-    console.error('上传失败:', err);
-    alert(`操作失败: ${err.message}`);
+    status.value = '上传失败';
+    alert(`上传失败: ${err.message}`);
   } finally {
     isLoading.value = false;
   }
+};
 
+const calculateSHA256 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const buffer = reader.result;
+        const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        resolve(hashHex);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
 };
 
 const getPresignedURL = async (params) => {
   const response = await axios.post(
-    '/api/upload/uploadUrl',
+    '/api/file/uploadUrl',
     params,
     {
       headers: {
@@ -86,10 +134,17 @@ const getPresignedURL = async (params) => {
 const uploadFileToMinIO = async (url, file) => {
   const response = await axios.put(url, file, {
     headers: {
-      'Content-Type': 'application/octet-stream'
+      'Content-Type': file.type || 'application/octet-stream'
+    },
+    onUploadProgress: (progressEvent) => {
+      if (progressEvent.total) {
+        progress.value = Math.min(
+          progress.value + progressEvent.loaded / progressEvent.total * 20,
+          90
+        );
+      }
     }
   });
-  console.log('文件上传完成', response);
 };
 </script>
 
@@ -138,5 +193,40 @@ button {
 
 button:hover {
   background-color: #3aa876;
+}
+
+button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.progress-bar {
+  margin: 1rem 0;
+  height: 20px;
+  background-color: #f0f0f0;
+  border-radius: 4px;
+  position: relative;
+}
+
+.progress {
+  height: 100%;
+  background-color: #42b983;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-bar span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: #333;
+  font-size: 0.8rem;
+}
+
+.status {
+  margin: 1rem 0;
+  text-align: center;
+  color: #666;
 }
 </style>

@@ -12,7 +12,7 @@ type Application struct {
 
 func Init() (*Application, error) {
 	// TODO: get config from env
-	storageClient, err := storage.NewMinioClient(
+	storageClient, err := storage.NewStorageClient(
 		"minio:9000",
 		"filemgr",
 		"password@123456",
